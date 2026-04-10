@@ -1,0 +1,24 @@
+{
+    "id": "dankRazer",
+    "name": "Razer Device Manager",
+    "description": "Control Razer peripherals via OpenRazer — lighting effects, brightness, DPI, and battery monitoring",
+    "version": "0.1.0",
+    "author": "Zach",
+    "icon": "mouse",
+    "type": "widget",
+    "capabilities": [
+        "dankbar-widget",
+        "control-center",
+        "command-execution"
+    ],
+    "component": "./DankRazerWidget.qml",
+    "settings": "./DankRazerSettings.qml",
+    "requires": ["dankrazer"],
+    "requires_dms": ">=1.4.0",
+    "permissions": [
+        "settings_read",
+        "settings_write",
+        "process"
+    ],
+    "license": "MIT"
+}
