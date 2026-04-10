@@ -2,8 +2,10 @@ package razer
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5/introspect"
 )
 
 const (
@@ -26,9 +28,11 @@ type DeviceInfo struct {
 	MatrixCols   int     `json:"matrix_cols,omitempty"`
 	Brightness   float64 `json:"brightness"`
 	DPI          []int   `json:"dpi,omitempty"`
-	Battery      float64 `json:"battery,omitempty"`
-	IsCharging   bool    `json:"is_charging,omitempty"`
-	PollRate     int     `json:"poll_rate,omitempty"`
+	MaxDPI       int      `json:"max_dpi,omitempty"`
+	Battery      float64  `json:"battery,omitempty"`
+	IsCharging   bool     `json:"is_charging,omitempty"`
+	PollRate     int      `json:"poll_rate,omitempty"`
+	Effects      []string `json:"effects,omitempty"`
 }
 
 // Device wraps a D-Bus object for a single Razer device.
@@ -143,6 +147,11 @@ func (d *Device) SetDPI(x, y uint16) error {
 	return d.call(ifaceDPI, "setDPI", x, y).Err
 }
 
+// MaxDPI returns the maximum supported DPI value.
+func (d *Device) MaxDPI() (int, error) {
+	return d.getInt(ifaceDPI, "maxDPI")
+}
+
 // PollRate returns the current polling rate.
 func (d *Device) PollRate() (int, error) {
 	return d.getInt(ifaceMisc, "getPollRate")
@@ -169,6 +178,7 @@ func (d *Device) Info() DeviceInfo {
 	info.HasMatrix, _ = d.HasMatrix()
 	info.Brightness, _ = d.Brightness()
 	info.DPI, _ = d.DPI()
+	info.MaxDPI, _ = d.MaxDPI()
 	info.PollRate, _ = d.PollRate()
 
 	if info.HasMatrix {
@@ -179,7 +189,56 @@ func (d *Device) Info() DeviceInfo {
 	info.Battery, _ = d.Battery()
 	info.IsCharging, _ = d.IsCharging()
 
+	info.Effects = d.SupportedEffects()
+
 	return info
+}
+
+// SupportedEffects returns the list of chroma effect methods available on this device.
+func (d *Device) SupportedEffects() []string {
+	node, err := introspect.Call(d.obj)
+	if err != nil {
+		return nil
+	}
+
+	methodToEffect := map[string]string{
+		"setStatic":         "static",
+		"setBreathSingle":   "breath",
+		"setBreathRandom":   "breath",
+		"setWave":           "wave",
+		"setSpectrum":       "spectrum",
+		"setReactive":       "reactive",
+		"setStarlightRandom": "starlight",
+		"setNone":           "none",
+	}
+
+	seen := map[string]bool{}
+	for _, iface := range node.Interfaces {
+		if !strings.HasPrefix(iface.Name, "razer.device.lighting") {
+			continue
+		}
+		for _, m := range iface.Methods {
+			if effect, ok := methodToEffect[m.Name]; ok && !seen[effect] {
+				seen[effect] = true
+			}
+		}
+	}
+
+	var effects []string
+	for e := range seen {
+		effects = append(effects, e)
+	}
+	return effects
+}
+
+// RestoreLastEffect restores the device's last saved effect.
+func (d *Device) RestoreLastEffect() error {
+	return d.call(ifaceChroma, "restoreLastEffect").Err
+}
+
+// GetEffect returns the current effect name.
+func (d *Device) GetEffect() (string, error) {
+	return d.getString(ifaceChroma, "getEffect")
 }
 
 // --- Lighting Effects ---
@@ -229,7 +288,11 @@ func (d *Device) SetStarlightSingle(r, g, b, speed byte) error {
 	return d.call(ifaceChroma, "setStarlightSingle", r, g, b, speed).Err
 }
 
-// SetNone turns off lighting.
+// SetNone turns off lighting. Falls back to static black if setNone is unsupported.
 func (d *Device) SetNone() error {
-	return d.call(ifaceChroma, "setNone").Err
+	err := d.call(ifaceChroma, "setNone").Err
+	if err != nil {
+		return d.SetStatic(0, 0, 0)
+	}
+	return nil
 }

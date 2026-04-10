@@ -1,4 +1,4 @@
-module github.com/zachatrocern/dankrazer
+module github.com/zachfi/dms-razer/dankrazer-cli
 
 go 1.26.1
 

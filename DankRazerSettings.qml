@@ -49,4 +49,20 @@ PluginSettings {
         defaultValue: "00ffff"
         leftIcon: "touch_app"
     }
+
+    ToggleSetting {
+        settingKey: "syncAll"
+        label: "Sync All Devices"
+        description: "Apply brightness, effects, and DPI to all connected devices"
+        defaultValue: true
+        leftIcon: "sync"
+    }
+
+    ToggleSetting {
+        settingKey: "autoLightsOff"
+        label: "Auto Lights Off"
+        description: "Turn off device lighting on screen lock, sleep, or monitor off"
+        defaultValue: true
+        leftIcon: "bedtime"
+    }
 }

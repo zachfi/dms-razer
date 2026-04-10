@@ -2,8 +2,8 @@
     "id": "dankRazer",
     "name": "Razer Device Manager",
     "description": "Control Razer peripherals via OpenRazer — lighting effects, brightness, DPI, and battery monitoring",
-    "version": "0.1.0",
-    "author": "Zach",
+    "version": "0.2.0",
+    "author": "zachfi",
     "icon": "mouse",
     "type": "widget",
     "capabilities": [

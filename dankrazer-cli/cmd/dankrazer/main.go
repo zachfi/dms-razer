@@ -2,13 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/zachatrocern/dankrazer/internal/razer"
+	"github.com/zachfi/dms-razer/dankrazer-cli/internal/razer"
 )
 
 func main() {
@@ -77,6 +78,24 @@ func resolveDevice(c *razer.Client, selector string) (*razer.Device, error) {
 	}
 
 	return nil, fmt.Errorf("device not found: %s", selector)
+}
+
+func resolveDevices(c *razer.Client, selector string, all bool) ([]*razer.Device, error) {
+	if all {
+		devices, err := c.Devices()
+		if err != nil {
+			return nil, err
+		}
+		if len(devices) == 0 {
+			return nil, fmt.Errorf("no Razer devices found")
+		}
+		return devices, nil
+	}
+	d, err := resolveDevice(c, selector)
+	if err != nil {
+		return nil, err
+	}
+	return []*razer.Device{d}, nil
 }
 
 // --- Commands ---
@@ -198,23 +217,26 @@ func infoCmd() *cobra.Command {
 
 func brightnessCmd() *cobra.Command {
 	var device string
+	var all bool
 	cmd := &cobra.Command{
 		Use:   "brightness [level]",
 		Short: "Get or set brightness (0-100)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
 
 				if len(args) == 0 {
-					b, err := d.Brightness()
-					if err != nil {
-						return err
+					for _, d := range devices {
+						b, err := d.Brightness()
+						if err != nil {
+							return err
+						}
+						fmt.Printf("%.0f\n", b)
 					}
-					fmt.Printf("%.0f\n", b)
 					return nil
 				}
 
@@ -222,22 +244,31 @@ func brightnessCmd() *cobra.Command {
 				if err != nil || level < 0 || level > 100 {
 					return fmt.Errorf("brightness must be 0-100")
 				}
-				return d.SetBrightness(level)
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetBrightness(level); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
 	cmd.Flags().StringVarP(&device, "device", "d", "", "Device selector")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Apply to all devices")
 	return cmd
 }
 
 func effectCmd() *cobra.Command {
 	var device string
+	var all bool
 
 	cmd := &cobra.Command{
 		Use:   "effect",
 		Short: "Set lighting effect",
 	}
 	cmd.PersistentFlags().StringVarP(&device, "device", "d", "", "Device selector")
+	cmd.PersistentFlags().BoolVarP(&all, "all", "a", false, "Apply to all devices")
 
 	// static
 	staticCmd := &cobra.Command{
@@ -250,11 +281,17 @@ func effectCmd() *cobra.Command {
 				return err
 			}
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				return d.SetStatic(r, g, b)
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetStatic(r, g, b); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -266,31 +303,37 @@ func effectCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				switch len(args) {
-				case 0:
-					return d.SetBreathRandom()
-				case 1:
-					r, g, b, err := parseHexColor(args[0])
-					if err != nil {
-						return err
+				var errs []error
+				for _, d := range devices {
+					switch len(args) {
+					case 0:
+						err = d.SetBreathRandom()
+					case 1:
+						r, g, b, err := parseHexColor(args[0])
+						if err != nil {
+							return err
+						}
+						err = d.SetBreathSingle(r, g, b)
+					case 2:
+						r1, g1, b1, err := parseHexColor(args[0])
+						if err != nil {
+							return err
+						}
+						r2, g2, b2, err := parseHexColor(args[1])
+						if err != nil {
+							return err
+						}
+						err = d.SetBreathDual(r1, g1, b1, r2, g2, b2)
 					}
-					return d.SetBreathSingle(r, g, b)
-				case 2:
-					r1, g1, b1, err := parseHexColor(args[0])
 					if err != nil {
-						return err
+						errs = append(errs, err)
 					}
-					r2, g2, b2, err := parseHexColor(args[1])
-					if err != nil {
-						return err
-					}
-					return d.SetBreathDual(r1, g1, b1, r2, g2, b2)
 				}
-				return nil
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -306,11 +349,17 @@ func effectCmd() *cobra.Command {
 				dir = 2
 			}
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				return d.SetWave(dir)
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetWave(dir); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -321,11 +370,17 @@ func effectCmd() *cobra.Command {
 		Short: "Set spectrum (rainbow cycle) effect",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				return d.SetSpectrum()
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetSpectrum(); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -345,11 +400,17 @@ func effectCmd() *cobra.Command {
 				return fmt.Errorf("speed must be 1-4")
 			}
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				return d.SetReactive(r, g, b, speed)
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetReactive(r, g, b, speed); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -362,18 +423,27 @@ func effectCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				if len(args) == 0 {
-					return d.SetStarlightRandom(speed)
+				var errs []error
+				for _, d := range devices {
+					if len(args) == 0 {
+						if err := d.SetStarlightRandom(speed); err != nil {
+							errs = append(errs, err)
+						}
+					} else {
+						r, g, b, err := parseHexColor(args[0])
+						if err != nil {
+							return err
+						}
+						if err := d.SetStarlightSingle(r, g, b, speed); err != nil {
+							errs = append(errs, err)
+						}
+					}
 				}
-				r, g, b, err := parseHexColor(args[0])
-				if err != nil {
-					return err
-				}
-				return d.SetStarlightSingle(r, g, b, speed)
+				return errors.Join(errs...)
 			})
 		},
 	}
@@ -385,38 +455,68 @@ func effectCmd() *cobra.Command {
 		Short: "Turn off lighting",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
-				return d.SetNone()
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetNone(); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
 
-	cmd.AddCommand(staticCmd, breathCmd, waveCmd, spectrumCmd, reactiveCmd, starlightCmd, noneCmd)
+	// restore
+	restoreCmd := &cobra.Command{
+		Use:   "restore",
+		Short: "Restore last saved effect",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return withClient(func(c *razer.Client) error {
+				devices, err := resolveDevices(c, device, all)
+				if err != nil {
+					return err
+				}
+				var errs []error
+				for _, d := range devices {
+					if err := d.RestoreLastEffect(); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
+			})
+		},
+	}
+
+	cmd.AddCommand(staticCmd, breathCmd, waveCmd, spectrumCmd, reactiveCmd, starlightCmd, noneCmd, restoreCmd)
 	return cmd
 }
 
 func dpiCmd() *cobra.Command {
 	var device string
+	var all bool
 	cmd := &cobra.Command{
 		Use:   "dpi [value]",
 		Short: "Get or set DPI (sets both axes)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return withClient(func(c *razer.Client) error {
-				d, err := resolveDevice(c, device)
+				devices, err := resolveDevices(c, device, all)
 				if err != nil {
 					return err
 				}
 				if len(args) == 0 {
-					dpi, err := d.DPI()
-					if err != nil {
-						return err
-					}
-					if len(dpi) >= 2 {
-						fmt.Printf("%d,%d\n", dpi[0], dpi[1])
+					for _, d := range devices {
+						dpi, err := d.DPI()
+						if err != nil {
+							continue
+						}
+						if len(dpi) >= 2 {
+							fmt.Printf("%d,%d\n", dpi[0], dpi[1])
+						}
 					}
 					return nil
 				}
@@ -424,11 +524,18 @@ func dpiCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("invalid DPI value: %w", err)
 				}
-				return d.SetDPI(uint16(val), uint16(val))
+				var errs []error
+				for _, d := range devices {
+					if err := d.SetDPI(uint16(val), uint16(val)); err != nil {
+						errs = append(errs, err)
+					}
+				}
+				return errors.Join(errs...)
 			})
 		},
 	}
 	cmd.Flags().StringVarP(&device, "device", "d", "", "Device selector")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Apply to all devices")
 	return cmd
 }
 
