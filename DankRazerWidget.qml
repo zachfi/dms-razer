@@ -32,6 +32,7 @@ PluginComponent {
     property var supportedEffects: []
     property int dpi: 0
     property int maxDpi: 0
+    property int selectedDeviceMaxDpi: 0
 
     // Color picker state
     property string staticColor: pluginData.staticColor || "00ff00"
@@ -87,8 +88,18 @@ PluginComponent {
                     root.battery = d.battery || -1
                     root.isCharging = d.is_charging || false
                     root.supportedEffects = d.effects || []
-                    root.dpi = (d.dpi && d.dpi.length > 0) ? d.dpi[0] : 0
-                    root.maxDpi = d.max_dpi || 0
+                    root.selectedDeviceMaxDpi = d.max_dpi || 0
+                    // Find best max_dpi across all devices (for when syncAll is on and selected device isn't a mouse)
+                    var bestMaxDpi = 0
+                    var bestDpi = 0
+                    for (var i = 0; i < parsed.length; i++) {
+                        if ((parsed[i].max_dpi || 0) > bestMaxDpi) {
+                            bestMaxDpi = parsed[i].max_dpi
+                            bestDpi = (parsed[i].dpi && parsed[i].dpi.length > 0) ? parsed[i].dpi[0] : 0
+                        }
+                    }
+                    root.dpi = root.selectedDeviceMaxDpi > 0 ? ((d.dpi && d.dpi.length > 0) ? d.dpi[0] : 0) : bestDpi
+                    root.maxDpi = bestMaxDpi
                 }
             } catch (e) {
                 root.hasError = true
@@ -349,6 +360,8 @@ PluginComponent {
             detailsText: root.deviceName || "No devices"
             showCloseButton: true
 
+            Component.onCompleted: root.refresh()
+
             Column {
                 width: parent.width
                 spacing: Theme.spacingL
@@ -498,7 +511,7 @@ PluginComponent {
 
                     // DPI section
                     Rectangle {
-                        visible: root.maxDpi > 0
+                        visible: root.maxDpi > 0 && (root.syncAll || root.selectedDeviceMaxDpi > 0)
                         width: parent.width
                         height: dpiCol.height + Theme.spacingM * 2
                         radius: Theme.cornerRadius
