@@ -715,6 +715,44 @@ PluginComponent {
                                     }
                                 }
                             }
+
+                            // DPI presets
+                            Row {
+                                width: parent.width
+                                spacing: Theme.spacingS
+
+                                Repeater {
+                                    model: [400, 800, 1600, 3200, 6400].filter(v => v <= root.maxDpi)
+                                    delegate: Rectangle {
+                                        property int presetDpi: modelData
+                                        property bool isActive: root.sliderToDpi(dpiSlider.value) === presetDpi
+                                        width: (parent.width - Theme.spacingS * (parent.children.length - 1)) / parent.children.length
+                                        height: 24
+                                        radius: Theme.cornerRadius
+                                        color: presetArea.containsMouse ? Theme.primary : Theme.surfaceVariant
+                                        border.color: isActive && !presetArea.containsMouse ? Theme.primary : "transparent"
+                                        border.width: 2
+
+                                        StyledText {
+                                            anchors.centerIn: parent
+                                            text: presetDpi >= 1000 ? (presetDpi / 1000) + "K" : presetDpi
+                                            font.pixelSize: Theme.fontSizeSmall
+                                            color: presetArea.containsMouse ? Theme.onPrimary : Theme.surfaceText
+                                        }
+
+                                        MouseArea {
+                                            id: presetArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                dpiSlider.value = root.dpiToSlider(presetDpi)
+                                                root.setDpi(presetDpi)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
