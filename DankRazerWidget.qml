@@ -171,14 +171,18 @@ PluginComponent {
 
     // --- Actions ---
 
+    function deviceArgs() {
+        if (root.syncAll) return ["--all"]
+        return ["--device", root.serial]
+    }
+
     function setBrightness(level) {
         if (brightnessProcess.running) {
             root._pendingBrightness = level
             return
         }
         root._pendingBrightness = null
-        var cmd = [root.cliPath, "brightness"]
-        if (root.syncAll) cmd.push("--all")
+        var cmd = [root.cliPath, "brightness"].concat(root.deviceArgs())
         cmd.push(String(Math.round(level)))
         brightnessProcess.command = cmd
         brightnessProcess.running = true
@@ -192,8 +196,7 @@ PluginComponent {
             return
         }
         root._pendingEffect = null
-        var cmd = [root.cliPath, "effect"]
-        if (root.syncAll) cmd.push("--all")
+        var cmd = [root.cliPath, "effect"].concat(root.deviceArgs())
         effectProcess.command = cmd.concat(args)
         effectProcess.running = true
     }
@@ -219,8 +222,7 @@ PluginComponent {
             return
         }
         root._pendingDpi = null
-        var cmd = [root.cliPath, "dpi"]
-        if (root.syncAll) cmd.push("--all")
+        var cmd = [root.cliPath, "dpi"].concat(root.deviceArgs())
         cmd.push(String(Math.round(value)))
         dpiProcess.command = cmd
         dpiProcess.running = true
@@ -299,7 +301,7 @@ PluginComponent {
             lastEffectArgs: root._lastEffectArgs
         }
         root._isDark = true
-        darkProcess.command = [root.cliPath, "effect", "--all", "static", "000000"]
+        darkProcess.command = [root.cliPath, "effect", "--all", "static", "000000"]  // always all for lights-off
         darkProcess.running = true
     }
 
