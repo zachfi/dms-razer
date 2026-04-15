@@ -46,6 +46,7 @@ PluginComponent {
     property var _savedState: null
     property bool _isDark: false
     property var _lastEffectArgs: []
+    property string currentEffect: ""  // label of the last-applied effect
 
     // Pending values for process re-entrancy (last-write-wins while a process is busy)
     property var _pendingBrightness: null
@@ -183,8 +184,9 @@ PluginComponent {
         brightnessProcess.running = true
     }
 
-    function setEffect(args) {
+    function setEffect(args, label) {
         root._lastEffectArgs = args
+        if (label !== undefined) root.currentEffect = label
         if (effectProcess.running) {
             root._pendingEffect = args
             return
@@ -273,10 +275,10 @@ PluginComponent {
             var hex = root.colorToHex(selectedColor)
             if (root._pendingColorEffect === "static") {
                 root.staticColor = hex
-                root.setEffect(["static", hex])
+                root.setEffect(["static", hex], "Static")
             } else if (root._pendingColorEffect === "reactive") {
                 root.reactiveColor = hex
-                root.setEffect(["reactive", hex])
+                root.setEffect(["reactive", hex], "Reactive")
             }
             root._pendingColorEffect = ""
         }
@@ -756,7 +758,10 @@ PluginComponent {
                                         width: visible ? (effectCol.width - Theme.spacingS * 2) / 3 : 0
                                         height: visible ? 56 : 0
                                         radius: Theme.cornerRadius
+                                        property bool isActive: root.currentEffect === modelData.label
                                         color: effectMouse.containsMouse ? Theme.primary : Theme.surfaceVariant
+                                        border.color: isActive && !effectMouse.containsMouse ? Theme.primary : "transparent"
+                                        border.width: 2
 
                                         Column {
                                             anchors.centerIn: parent
@@ -797,7 +802,7 @@ PluginComponent {
                                                 if (modelData.picker) {
                                                     root.openColorPicker(modelData.effectType)
                                                 } else {
-                                                    root.setEffect(modelData.args)
+                                                    root.setEffect(modelData.args, modelData.label)
                                                 }
                                             }
                                         }
