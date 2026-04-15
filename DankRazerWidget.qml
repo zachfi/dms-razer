@@ -47,10 +47,16 @@ PluginComponent {
     property bool _isDark: false
     property var _lastEffectArgs: []
 
+    // Pending values for process re-entrancy (last-write-wins while a process is busy)
+    property var _pendingBrightness: null
+    property var _pendingDpi: null
+    property var _pendingEffect: null
+
     property int refreshInterval: (pluginData.refreshInterval || 30) * 1000
 
-    // JSON output accumulator
+    // Output accumulators
     property string _jsonOutput: ""
+    property string _stderrOutput: ""
 
     // --- Processes ---
 
@@ -65,10 +71,16 @@ PluginComponent {
             }
         }
 
+        stderr: SplitParser {
+            onRead: data => {
+                root._stderrOutput += data
+            }
+        }
+
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0) {
                 root.hasError = true
-                root.errorText = "Failed to list devices"
+                root.errorText = root._stderrOutput.trim() || "Failed to list devices"
                 root.isLoading = false
                 root.devices = []
                 root.deviceCount = 0
@@ -114,7 +126,13 @@ PluginComponent {
         command: []
         running: false
         onExited: (exitCode, exitStatus) => {
-            refresh()
+            if (root._pendingBrightness !== null) {
+                var val = root._pendingBrightness
+                root._pendingBrightness = null
+                root.setBrightness(val)
+            } else {
+                refresh()
+            }
         }
     }
 
@@ -123,7 +141,13 @@ PluginComponent {
         command: []
         running: false
         onExited: (exitCode, exitStatus) => {
-            refresh()
+            if (root._pendingEffect !== null) {
+                var args = root._pendingEffect
+                root._pendingEffect = null
+                root.setEffect(args)
+            } else {
+                refresh()
+            }
         }
     }
 
@@ -132,6 +156,7 @@ PluginComponent {
     function refresh() {
         if (listProcess.running) return
         root._jsonOutput = ""
+        root._stderrOutput = ""
         listProcess.running = true
     }
 
@@ -146,6 +171,11 @@ PluginComponent {
     // --- Actions ---
 
     function setBrightness(level) {
+        if (brightnessProcess.running) {
+            root._pendingBrightness = level
+            return
+        }
+        root._pendingBrightness = null
         var cmd = [root.cliPath, "brightness"]
         if (root.syncAll) cmd.push("--all")
         cmd.push(String(Math.round(level)))
@@ -155,6 +185,11 @@ PluginComponent {
 
     function setEffect(args) {
         root._lastEffectArgs = args
+        if (effectProcess.running) {
+            root._pendingEffect = args
+            return
+        }
+        root._pendingEffect = null
         var cmd = [root.cliPath, "effect"]
         if (root.syncAll) cmd.push("--all")
         effectProcess.command = cmd.concat(args)
@@ -166,11 +201,22 @@ PluginComponent {
         command: []
         running: false
         onExited: (exitCode, exitStatus) => {
-            refresh()
+            if (root._pendingDpi !== null) {
+                var val = root._pendingDpi
+                root._pendingDpi = null
+                root.setDpi(val)
+            } else {
+                refresh()
+            }
         }
     }
 
     function setDpi(value) {
+        if (dpiProcess.running) {
+            root._pendingDpi = value
+            return
+        }
+        root._pendingDpi = null
         var cmd = [root.cliPath, "dpi"]
         if (root.syncAll) cmd.push("--all")
         cmd.push(String(Math.round(value)))
