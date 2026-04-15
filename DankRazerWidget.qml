@@ -490,6 +490,53 @@ PluginComponent {
                         }
                     }
 
+                    // Device selector tabs (multiple devices, not syncing all)
+                    Row {
+                        id: deviceSelector
+                        visible: root.deviceCount > 1 && !root.syncAll
+                        width: parent.width
+                        spacing: Theme.spacingS
+
+                        Repeater {
+                            model: root.devices
+                            delegate: Rectangle {
+                                width: (deviceSelector.width - Theme.spacingS * (root.deviceCount - 1)) / root.deviceCount
+                                height: 36
+                                radius: Theme.cornerRadius
+                                color: root.selectedDevice === index ? Theme.primary : Theme.surfaceVariant
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: Theme.spacingXS
+
+                                    DankIcon {
+                                        name: modelData.type === "mouse" ? "mouse" : modelData.type === "headset" ? "headset" : "keyboard"
+                                        size: 14
+                                        color: root.selectedDevice === index ? Theme.onPrimary : Theme.surfaceText
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    StyledText {
+                                        text: (modelData.name || ("Device " + (index + 1))).split(" ").slice(-1)[0]
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        color: root.selectedDevice === index ? Theme.onPrimary : Theme.surfaceText
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.selectedDevice = index
+                                        root.refresh()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Sync all toggle
                     DankToggle {
                         visible: root.deviceCount > 1
